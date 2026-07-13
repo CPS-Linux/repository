@@ -1,0 +1,32 @@
+# cpsbuild recipe for cpsi
+[package]
+name = "cpsi"
+version = "1.0.0"
+release = 1
+arch = ["x86_64"]
+description = "Package Manager for CPS Linux"
+license = "Apache 2.0"
+depends = ["rust", "git", "patch"]
+provides = ["package-manager"]
+
+[source]
+# Replace this with an HTTPS url + sha256, a git source, or your local tree.
+git = "https://github.com/CPS-Linux/cpsi"
+
+[build]
+prepare = """
+git submodule update --init --recursive
+"""
+
+build = """
+cargo build --release
+"""
+
+install = """
+mkdir -p "$PKG_INSTALL_DIR/usr/sbin"
+cp ./target/release/cpsi "$PKG_INSTALL_DIR/usr/sbin/cpsi"
+"""
+
+[scripts]
+# post = """update-icon-caches -q /usr/share/icons/hicolor"""
+# pre = """:"""

@@ -1,0 +1,129 @@
+name: Update Linux upstream
+
+on:
+  schedule:
+    # 04:17 JST; deliberately avoids the busy start of the hour.
+    - cron: "17 19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-linux-upstream
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check kernel.org stable
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      updated: ${{ steps.update.outputs.updated }}
+      old_version: ${{ steps.update.outputs.old_version }}
+      new_version: ${{ steps.update.outputs.new_version }}
+      patch_data: ${{ steps.patch.outputs.data }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check and update recipe
+        id: update
+        run: python3 .github/scripts/update-linux-upstream.py
+
+      - name: Install Kconfig validation dependencies
+        if: steps.update.outputs.updated == 'true'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            flex \
+            libelf-dev \
+            libssl-dev \
+            xz-utils
+
+      - name: Validate updated recipe and Kconfig
+        if: steps.update.outputs.updated == 'true'
+        env:
+          RECIPE_PATH: ${{ steps.update.outputs.recipe_path }}
+          ARCHIVE_PATH: ${{ steps.update.outputs.archive_path }}
+        run: bash .github/scripts/validate-linux-upstream.sh "$RECIPE_PATH" "$ARCHIVE_PATH"
+
+      - name: Package validated changes
+        id: patch
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          git diff --binary HEAD > "$RUNNER_TEMP/linux-upstream.patch"
+          test -s "$RUNNER_TEMP/linux-upstream.patch"
+          patch_data="$(gzip --best --stdout "$RUNNER_TEMP/linux-upstream.patch" | base64 --wrap=0)"
+          test "${#patch_data}" -lt 900000
+          echo "data=$patch_data" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish update pull request
+    needs: check
+    if: needs.check.outputs.updated == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Apply validated update
+        env:
+          PATCH_DATA: ${{ needs.check.outputs.patch_data }}
+        run: |
+          test -n "$PATCH_DATA"
+          printf '%s' "$PATCH_DATA" \
+            | base64 --decode \
+            | gzip --decompress \
+            > "$RUNNER_TEMP/linux-upstream.patch"
+          git apply --index --binary "$RUNNER_TEMP/linux-upstream.patch"
+          git diff --cached --check
+          mapfile -t changed_paths < <(git diff --cached --name-only)
+          test "${#changed_paths[@]}" -gt 0
+          for path in "${changed_paths[@]}"; do
+            case "$path" in
+              core/README.md|core/linux-upstream-*.cpsb/*) ;;
+              *) echo "unexpected changed path: $path" >&2; exit 1 ;;
+            esac
+          done
+
+      - name: Create or update pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: automation/update-linux-upstream
+          delete-branch: true
+          commit-message: "core: update linux-upstream to ${{ needs.check.outputs.new_version }}"
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          title: "core: update linux-upstream to ${{ needs.check.outputs.new_version }}"
+          body: |
+            Automated update from kernel.org's stable release feed.
+
+            - Previous version: `${{ needs.check.outputs.old_version }}`
+            - New version: `${{ needs.check.outputs.new_version }}`
+            - Source archive and official `sha256sums.asc` agree
+            - CPS Kconfig fragment and `${{ needs.check.outputs.new_version }}-cps` kernel release validated
+
+            This pull request is intentionally not auto-merged so kernel configuration
+            and ABI changes can be reviewed.

@@ -1,0 +1,4 @@
+*.clos
+*.minisig
+*.minisign
+Packages.parquet

@@ -1,0 +1,85 @@
+[package]
+name = "gcc"
+version = "16.1.0"
+release = 1
+arch = ["x86_64"]
+description = "GNU Compiler Collection (C and C++)"
+license = "GPL-3.0-or-later WITH GCC-exception-3.1"
+depends = [
+    "binutils",
+    "glibc>=2.43",
+]
+provides = [
+    "cc",
+    "c-compiler",
+    "cxx-compiler",
+    "libgcc",
+    "libstdc++",
+]
+build-depends = [
+    "binutils",
+    "bzip2",
+    "g++",
+    "gcc",
+    "glibc>=2.43",
+    "gzip",
+    "make",
+    "perl",
+    "python",
+    "tar",
+    "wget",
+    "xz",
+]
+
+[source]
+url = "https://gcc.gnu.org/pub/gcc/releases/gcc-16.1.0/gcc-16.1.0.tar.xz"
+sha256 = "50efb4d94c3397aff3b0d61a5abd748b4dd31d9d3f2ab7be05b171d36a510f79"
+
+[build]
+prepare = """
+set -eu
+cd "$PKG_SOURCE_DIR"
+
+# GCC's release script pins and verifies these prerequisites with SHA-512.
+./contrib/download_prerequisites --no-isl --sha512
+
+rm -rf "$PKG_BUILD_DIR/gcc"
+mkdir -p "$PKG_BUILD_DIR/gcc"
+cd "$PKG_BUILD_DIR/gcc"
+"$PKG_SOURCE_DIR/configure" \
+    --prefix=/usr \
+    --libdir=/usr/lib \
+    --libexecdir=/usr/lib \
+    --with-pkgversion="CPS Linux" \
+    --with-bugurl="https://github.com/CPS-Linux/repository/issues" \
+    --enable-languages=c,c++,lto \
+    --enable-shared \
+    --enable-threads=posix \
+    --enable-__cxa_atexit \
+    --enable-clocale=gnu \
+    --enable-linker-build-id \
+    --enable-lto \
+    --enable-plugin \
+    --enable-default-pie \
+    --enable-default-ssp \
+    --enable-checking=release \
+    --disable-multilib \
+    --disable-werror \
+    --without-isl \
+    --without-zstd
+"""
+
+build = """
+set -eu
+make -C "$PKG_BUILD_DIR/gcc" -j"$PKG_JOBS"
+"""
+
+install = """
+set -eu
+make -C "$PKG_BUILD_DIR/gcc" DESTDIR="$PKG_INSTALL_DIR" install
+
+# The Info directory index is owned by the documentation system, not GCC.
+rm -f "$PKG_INSTALL_DIR/usr/share/info/dir"
+find "$PKG_INSTALL_DIR/usr/lib" -type f -name '*.la' -delete
+ln -sfn gcc "$PKG_INSTALL_DIR/usr/bin/cc"
+"""

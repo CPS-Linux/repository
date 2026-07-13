@@ -1,0 +1,70 @@
+[package]
+name = "glibc"
+version = "2.43"
+release = 1
+arch = ["x86_64"]
+description = "GNU C Library"
+license = "LGPL-2.1-or-later"
+depends = []
+provides = ["libc"]
+build-depends = [
+    "binutils",
+    "bison",
+    "gawk",
+    "gcc",
+    "linux-api-headers",
+    "make",
+    "python",
+]
+
+[source]
+url = "https://ftp.gnu.org/gnu/glibc/glibc-2.43.tar.xz"
+sha256 = "d9c86c6b5dbddb43a3e08270c5844fc5177d19442cf5b8df4be7c07cd5fa3831"
+
+[build]
+prepare = """
+set -eu
+rm -rf "$PKG_BUILD_DIR/glibc"
+mkdir -p "$PKG_BUILD_DIR/glibc"
+cd "$PKG_BUILD_DIR/glibc"
+libc_cv_slibdir=/usr/lib "$PKG_SOURCE_DIR/configure" \
+    --prefix=/usr \
+    --libdir=/usr/lib \
+    --libexecdir=/usr/lib \
+    --enable-bind-now \
+    --enable-kernel=5.10 \
+    --enable-stack-protector=strong \
+    --disable-nscd \
+    --disable-werror \
+    --with-headers=/usr/include
+"""
+
+build = """
+set -eu
+make -C "$PKG_BUILD_DIR/glibc" -j"$PKG_JOBS"
+"""
+
+install = """
+set -eu
+make -C "$PKG_BUILD_DIR/glibc" DESTDIR="$PKG_INSTALL_DIR" install
+
+rm -f "$PKG_INSTALL_DIR/etc/ld.so.cache"
+mkdir -p "$PKG_INSTALL_DIR/etc/ld.so.conf.d"
+install -Dm644 \
+    "$PKG_RECIPE_DIR/files/ld.so.conf" \
+    "$PKG_INSTALL_DIR/etc/ld.so.conf"
+install -Dm644 \
+    "$PKG_RECIPE_DIR/files/nsswitch.conf" \
+    "$PKG_INSTALL_DIR/etc/nsswitch.conf"
+
+# The x86-64 ABI names /lib64/ld-linux-x86-64.so.2 as the interpreter.
+# Provide a merged-/usr layout using only relative, package-internal links.
+mkdir -p "$PKG_INSTALL_DIR/usr/lib64"
+ln -sfn ../lib/ld-linux-x86-64.so.2 \
+    "$PKG_INSTALL_DIR/usr/lib64/ld-linux-x86-64.so.2"
+if [ -e "$PKG_INSTALL_DIR/lib64" ] || [ -L "$PKG_INSTALL_DIR/lib64" ]; then
+    echo "unexpected staged /lib64 path" >&2
+    exit 1
+fi
+ln -s usr/lib64 "$PKG_INSTALL_DIR/lib64"
+"""

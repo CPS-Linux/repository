@@ -1,0 +1,116 @@
+[package]
+name = "linux-upstream"
+version = "7.1.3"
+release = 1
+arch = ["x86_64"]
+description = "Upstream Linux kernel and userspace API headers"
+license = "GPL-2.0-only"
+depends = ["kmod"]
+provides = [
+    "kernel",
+    "linux",
+    "linux-api-headers",
+]
+build-depends = [
+    "bc",
+    "binutils",
+    "bison",
+    "elfutils",
+    "flex",
+    "gcc",
+    "kmod",
+    "make",
+    "openssl",
+    "perl",
+    "python",
+    "rsync",
+]
+
+[source]
+url = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.3.tar.xz"
+sha256 = "be41c068e88f5242a19bccdbffbe077b18c47b45f627e2325504b4fab79dd1dc"
+
+[build]
+prepare = """
+set -eu
+rm -rf "$PKG_BUILD_DIR/linux"
+mkdir -p "$PKG_BUILD_DIR/linux"
+
+make -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    x86_64_defconfig
+
+cd "$PKG_SOURCE_DIR"
+scripts/kconfig/merge_config.sh \
+    -m \
+    -O "$PKG_BUILD_DIR/linux" \
+    "$PKG_BUILD_DIR/linux/.config" \
+    "$PKG_RECIPE_DIR/files/cps-x86_64.config"
+
+make -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    olddefconfig
+"""
+
+build = """
+set -eu
+make -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    KBUILD_BUILD_USER=cps \
+    KBUILD_BUILD_HOST=builder \
+    KBUILD_BUILD_VERSION=1 \
+    KBUILD_BUILD_TIMESTAMP="Thu Jan 1 00:00:00 UTC 1970" \
+    -j"$PKG_JOBS" \
+    bzImage modules
+"""
+
+install = """
+set -eu
+kernel_release="$(make -s -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    kernelrelease)"
+
+if [ "$kernel_release" != "7.1.3-cps" ]; then
+    echo "unexpected kernel release: $kernel_release" >&2
+    exit 1
+fi
+
+depmod_path="$(command -v depmod || true)"
+if [ -z "$depmod_path" ]; then
+    echo "depmod is required to generate staged module metadata" >&2
+    exit 1
+fi
+
+make -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    DEPMOD="$depmod_path" \
+    INSTALL_MOD_PATH="$PKG_INSTALL_DIR" \
+    INSTALL_MOD_STRIP=1 \
+    modules_install
+
+make -C "$PKG_SOURCE_DIR" \
+    O="$PKG_BUILD_DIR/linux" \
+    ARCH=x86_64 \
+    INSTALL_HDR_PATH="$PKG_INSTALL_DIR/usr" \
+    headers_install
+
+install -Dm644 \
+    "$PKG_BUILD_DIR/linux/arch/x86/boot/bzImage" \
+    "$PKG_INSTALL_DIR/boot/vmlinuz-linux-upstream"
+install -Dm644 \
+    "$PKG_BUILD_DIR/linux/System.map" \
+    "$PKG_INSTALL_DIR/boot/System.map-linux-upstream"
+install -Dm644 \
+    "$PKG_BUILD_DIR/linux/.config" \
+    "$PKG_INSTALL_DIR/boot/config-linux-upstream"
+
+# modules_install creates build/source links into the temporary build tree.
+rm -f \
+    "$PKG_INSTALL_DIR/lib/modules/$kernel_release/build" \
+    "$PKG_INSTALL_DIR/lib/modules/$kernel_release/source"
+"""
