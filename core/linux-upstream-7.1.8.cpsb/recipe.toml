@@ -1,6 +1,6 @@
 [package]
 name = "linux-upstream"
-version = "7.1.3"
+version = "7.1.8"
 release = 1
 arch = ["x86_64"]
 description = "Upstream Linux kernel and userspace API headers"
@@ -27,8 +27,8 @@ build-depends = [
 ]
 
 [source]
-url = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.3.tar.xz"
-sha256 = "be41c068e88f5242a19bccdbffbe077b18c47b45f627e2325504b4fab79dd1dc"
+url = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.8.tar.xz"
+sha256 = "ff01dcb449279d5b4cfccdb01fee639cf5ff1803f1749a77844dd33915422c49"
 
 [build]
 prepare = """
@@ -74,7 +74,7 @@ kernel_release="$(make -s -C "$PKG_SOURCE_DIR" \
     ARCH=x86_64 \
     kernelrelease)"
 
-if [ "$kernel_release" != "7.1.3-cps" ]; then
+if [ "$kernel_release" != "7.1.8-cps" ]; then
     echo "unexpected kernel release: $kernel_release" >&2
     exit 1
 fi

@@ -4,7 +4,7 @@ The core repository currently defines these bootstrap packages for x86_64:
 
 | Package | Upstream version | Runtime dependencies | Provides |
 | --- | --- | --- | --- |
-| `linux-upstream` | 7.1.3 | `kmod` | `kernel`, `linux`, `linux-api-headers` |
+| `linux-upstream` | 7.1.8 | `kmod` | `kernel`, `linux`, `linux-api-headers` |
 | `glibc` | 2.43 | none | `libc` |
 | `gcc` | 16.1.0 | `glibc>=2.43`, `binutils` | C/C++ compiler and runtime capabilities |
 
@@ -55,10 +55,10 @@ On a prepared builder, build the recipes individually so failures are easy to
 attribute:
 
 ```sh
-cpsbuild build --output-dir core core/linux-upstream-7.1.3.cpsb
+cpsbuild build --output-dir core core/linux-upstream-7.1.8.cpsb
 cpsbuild build --output-dir core core/glibc-2.43.cpsb
 cpsbuild build --output-dir core core/gcc-16.1.0.cpsb
-cpsbuild verify core/linux-upstream-7.1.3-k1-x86_64.clos
+cpsbuild verify core/linux-upstream-7.1.8-k1-x86_64.clos
 cpsbuild verify core/glibc-2.43.0-k1-x86_64.clos
 cpsbuild verify core/gcc-16.1.0-k1-x86_64.clos
 ```
