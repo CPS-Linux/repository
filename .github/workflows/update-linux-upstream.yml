@@ -1,9 +1,6 @@
 name: Update Linux upstream
 
 on:
-  schedule:
-    # 04:17 JST; deliberately avoids the busy start of the hour.
-    - cron: "17 19 * * *"
   workflow_dispatch:
 
 permissions:
